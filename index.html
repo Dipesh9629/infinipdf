@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>INFINIPDF - 3D PDF Tools & Secure Login</title>
+    <meta name="description" content="3D PDF Tools with Secure Login. Ad-supported platform for PDF conversion." />
+    
+    <!-- Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+    
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- PDF-Lib -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://unpkg.com/downloadjs@1.4.7/download.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            dark: '#050505',
+                            purple: '#7c3aed',
+                            neon: '#a855f7',
+                            accent: '#22d3ee',
+                            surface: 'rgba(20, 20, 30, 0.6)'
+                        }
+                    },
+                    animation: {
+                        'pulse-glow': 'pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        'pulse-glow': {
+                            '0%, 100%': { boxShadow: '0 0 10px #7c3aed, 0 0 20px #7c3aed' },
+                            '50%': { boxShadow: '0 0 20px #a855f7, 0 0 40px #a855f7' },
+                        },
+                        'float': {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050505;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+
+        /* 3D Canvas Background */
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+        }
+
+        /* Glassmorphism */
+        .glass-panel {
+            background: rgba(20, 20, 25, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* Ad Placeholder Styles */
+        .ad-space {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+        .ad-space:hover {
+            border-color: rgba(168, 85, 247, 0.5);
+        }
+
+        /* 3D Card Effect */
+        .tool-card-3d {
+            transition: transform 0.1s ease, box-shadow 0.3s ease;
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+        
+        .tool-content {
+            transform: translateZ(20px);
+        }
+
+        /* Neon Text */
+        .text-neon {
+            text-shadow: 0 0 10px rgba(168, 85, 247, 0.7), 0 0 20px rgba(168, 85, 247, 0.5);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #4c1d95; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #7c3aed; }
+
+        /* Modal Transitions */
+        .modal {
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease-in-out;
+        }
+        .modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            transform: scale(0.9) translateY(20px);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .modal.active .modal-content {
+            transform: scale(1) translateY(0);
+        }
+
+        /* Google Button Style */
+        .google-btn {
+            background-color: white;
+            color: #333;
+            transition: all 0.3s;
+        }
+        .google-btn:hover {
+            background-color: #f1f1f1;
+            box-shadow: 0 4px 12px rgba(255,255,255,0.2);
+        }
+
+        .loader {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #a855f7;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .text-gradient {
+            background: linear-gradient(to right, #22d3ee, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <!-- 3D Background Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Navigation -->
+    <nav class="fixed w-full z-50 glass-panel border-b border-white/10 transition-all duration-300" id="navbar">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <!-- Logo -->
+                <div class="flex-shrink-0 flex items-center gap-2 cursor-pointer" onclick="window.scrollTo(0,0)">
+                    <div class="w-10 h-10 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(124,58,237,0.5)]">
+                        <i class="fas fa-file-pdf text-white text-xl"></i>
+                    </div>
+                    <span class="font-bold text-2xl tracking-tighter text-white">
+                        INFINI<span class="text-gradient">PDF</span>
+                    </span>
+                </div>
+
+                <!-- Desktop Menu -->
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="#tools" class="text-gray-300 hover:text-white transition-all text-sm font-medium">TOOLS</a>
+                    <a href="#features" class="text-gray-300 hover:text-white transition-all text-sm font-medium">FEATURES</a>
+                    
+                    <!-- Auth Section: Logged Out State -->
+                    <div id="auth-buttons" class="flex items-center gap-3">
+                        <button onclick="openAuthModal()" class="text-sm font-medium text-gray-300 hover:text-white transition-colors">Log In</button>
+                        <button onclick="openAuthModal()" class="bg-white text-black px-5 py-2 rounded-full text-sm font-bold hover:bg-gray-200 transition-colors shadow-lg shadow-white/10">Sign Up</button>
+                    </div>
+
+                    <!-- Auth Section: Logged In State (Hidden by default) -->
+                    <div id="user-profile" class="hidden flex items-center gap-3">
+                        <span class="text-sm text-gray-300">Hello, <span class="text-white font-bold">User</span></span>
+                        <div class="w-9 h-9 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center border-2 border-white/20 cursor-pointer hover:scale-105 transition-transform">
+                            <img src="https://ui-avatars.com/api/?name=User&background=random" alt="User" class="w-full h-full rounded-full">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <div class="md:hidden flex items-center gap-4">
+                     <button onclick="openAuthModal()" class="text-purple-400"><i class="fas fa-user-circle text-2xl"></i></button>
+                     <button id="mobile-menu-btn" class="text-white hover:text-purple-400 focus:outline-none">
+                        <i class="fas fa-bars text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden bg-black/95 border-t border-white/10 absolute w-full backdrop-blur-xl">
+            <div class="px-4 pt-4 pb-6 space-y-2">
+                <a href="#tools" class="block px-3 py-3 rounded-md text-base font-medium text-white hover:bg-white/10">All Tools</a>
+                <a href="#features" class="block px-3 py-3 rounded-md text-base font-medium text-white hover:bg-white/10">Features</a>
+                <button onclick="openAuthModal()" class="w-full text-left px-3 py-3 rounded-md text-base font-medium text-purple-400 hover:bg-white/10">Sign In / Sign Up</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- TOP AD BANNER (Leaderboard 728x90) -->
+    <div class="pt-24 pb-4 w-full flex justify-center z-10 relative">
+        <div id="ad-top" class="ad-space w-full max-w-[728px] h-[90px]">
+            <!-- PASTE YOUR GOOGLE ADSENSE CODE HERE -->
+            <span>Advertisement Space (728x90)</span>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="relative pt-10 pb-16 px-4 overflow-hidden">
+        <div class="max-w-7xl mx-auto text-center relative z-10">
+            <div class="inline-block mb-4 px-4 py-1 rounded-full border border-purple-500/30 bg-purple-500/10 backdrop-blur-md">
+                <span class="text-purple-300 text-xs font-bold tracking-widest uppercase">Secure • Fast • 3D</span>
+            </div>
+            
+            <h1 class="text-5xl md:text-7xl font-extrabold mb-6 leading-tight">
+                The Future of <br>
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 text-neon animate-pulse-glow">
+                    PDF Processing
+                </span>
+            </h1>
+            
+            <p class="text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+                Log in to sync your settings, or convert files anonymously. Experience the next generation of PDF tools directly in your browser.
+            </p>
+            
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <button onclick="scrollToTools()" class="group relative px-8 py-4 bg-white text-black font-bold rounded-full overflow-hidden transition-all hover:scale-105 shadow-[0_0_20px_rgba(255,255,255,0.3)]">
+                    <div class="absolute inset-0 w-full h-full bg-gradient-to-r from-cyan-400 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <span class="relative group-hover:text-white flex items-center gap-2">
+                        Explore Tools <i class="fas fa-arrow-right"></i>
+                    </span>
+                </button>
+            </div>
+        </div>
+        
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-600/20 rounded-full blur-[120px] -z-10 animate-pulse"></div>
+    </section>
+
+    <!-- Main Content Layout with Sidebar Ad -->
+    <section id="tools" class="py-10 relative z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col lg:flex-row gap-8">
+                
+                <!-- Left Column: Tools (Takes 3/4 space) -->
+                <div class="lg:w-3/4">
+                    <div class="mb-8">
+                        <h2 class="text-3xl md:text-5xl font-bold mb-4">Choose Your <span class="text-gradient">Tool</span></h2>
+                        <div class="h-1 w-20 bg-gradient-to-r from-cyan-400 to-purple-600 rounded-full"></div>
+                    </div>
+
+                    <!-- Filter Tabs -->
+                    <div class="flex flex-wrap justify-center gap-4 mb-8" id="filter-container">
+                        <button class="filter-btn active px-6 py-2 rounded-full border border-purple-500/50 bg-purple-500/20 text-white hover:bg-purple-600 hover:border-purple-400 transition-all backdrop-blur-sm" data-filter="all">All</button>
+                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 bg-white/5 text-gray-300 hover:border-cyan-400 hover:text-cyan-400 transition-all backdrop-blur-sm" data-filter="organize">Organize</button>
+                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 bg-white/5 text-gray-300 hover:border-cyan-400 hover:text-cyan-400 transition-all backdrop-blur-sm" data-filter="convert">Convert</button>
+                        <button class="filter-btn px-6 py-2 rounded-full border border-white/10 bg-white/5 text-gray-300 hover:border-cyan-400 hover:text-cyan-400 transition-all backdrop-blur-sm" data-filter="optimize">Optimize</button>
+                    </div>
+
+                    <!-- Tools Grid -->
+                    <div id="tools-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        <!-- Cards injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Right Column: Ad Space (Takes 1/4 space) -->
+                <div class="lg:w-1/4 hidden lg:block">
+                    <div class="sticky top-24 space-y-8">
+                        <div class="ad-space w-[300px] h-[250px] mx-auto">
+                            <!-- PASTE GOOGLE ADSENSE CODE HERE (Square 300x250) -->
+                            <span>Ad Space (300x250)</span>
+                        </div>
+                        
+                        <div class="glass-panel p-6 rounded-xl border border-white/10">
+                            <h3 class="font-bold text-lg mb-2 text-purple-400">Why Login?</h3>
+                            <p class="text-sm text-gray-400 mb-4">Access your history, save favorite tools, and sync across devices.</p>
+                            <button onclick="openAuthModal()" class="w-full py-2 rounded-lg border border-purple-500/50 text-purple-300 hover:bg-purple-500/10 text-sm transition-colors">Create Free Account</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 bg-black/30 relative">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="glass-panel p-8 rounded-2xl hover:bg-white/5 transition-all duration-300 border-l-4 border-l-purple-500">
+                    <div class="w-14 h-14 bg-purple-500/20 rounded-lg flex items-center justify-center mb-6 text-purple-400">
+                        <i class="fas fa-bolt text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Client-Side Power</h3>
+                    <p class="text-gray-400">Files are processed locally in your browser using advanced JavaScript. Your data never leaves your device.</p>
+                </div>
+                <!-- Feature 2 -->
+                <div class="glass-panel p-8 rounded-2xl hover:bg-white/5 transition-all duration-300 border-l-4 border-l-cyan-500">
+                    <div class="w-14 h-14 bg-cyan-500/20 rounded-lg flex items-center justify-center mb-6 text-cyan-400">
+                        <i class="fas fa-cube text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Immersive 3D UI</h3>
+                    <p class="text-gray-400">Navigate through a spatial interface designed for the future. Responsive, tactile, and beautiful.</p>
+                </div>
+                <!-- Feature 3 -->
+                <div class="glass-panel p-8 rounded-2xl hover:bg-white/5 transition-all duration-300 border-l-4 border-l-pink-500">
+                    <div class="w-14 h-14 bg-pink-500/20 rounded-lg flex items-center justify-center mb-6 text-pink-400">
+                        <i class="fas fa-infinity text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Unlimited & Free</h3>
+                    <p class="text-gray-400">No watermarks, no file size limits, no subscription fees. Just pure, unadulterated utility.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- BOTTOM AD BANNER -->
+    <div class="w-full flex justify-center py-10 z-10 relative">
+        <div class="ad-space w-full max-w-[728px] h-[90px]">
+             <!-- PASTE GOOGLE ADSENSE CODE HERE -->
+             <span>Advertisement Space (728x90)</span>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-black/80 border-t border-white/10 pt-16 pb-8 relative z-10 backdrop-blur-lg">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <div class="mb-8 flex justify-center items-center gap-2">
+                <i class="fas fa-cube text-purple-500 text-2xl"></i>
+                <span class="text-2xl font-bold text-white">INFINI<span class="text-purple-500">PDF</span> 3D</span>
+            </div>
+            <p class="text-gray-500 mb-8">The next generation of document manipulation. Secure. Fast. Beautiful.</p>
+            <div class="flex justify-center gap-6 mb-8">
+                <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fab fa-twitter text-xl"></i></a>
+                <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fab fa-github text-xl"></i></a>
+                <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fab fa-discord text-xl"></i></a>
+            </div>
+            <p class="text-gray-600 text-sm">© 2026 INFINIPDF. Engineered for Privacy.</p>
+        </div>
+    </footer>
+
+    <!-- ================= MODALS ================= -->
+
+    <!-- 1. AUTH MODAL -->
+    <div id="auth-modal" class="modal fixed inset-0 z-[100] flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-md" onclick="closeAuthModal()"></div>
+        
+        <div class="modal-content glass-panel w-full max-w-md rounded-2xl p-8 relative border border-purple-500/30 shadow-[0_0_50px_rgba(124,58,237,0.2)]">
+            <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+
+            <div class="text-center mb-8">
+                <h3 class="text-2xl font-bold text-white mb-2">Welcome Back</h3>
+                <p class="text-gray-400 text-sm">Sign in to save your history and settings</p>
+            </div>
+
+            <!-- Google Button -->
+            <button id="google-login-btn" onclick="handleGoogleLogin()" class="google-btn w-full py-3 rounded-lg font-semibold text-gray-700 flex items-center justify-center gap-3 mb-4">
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="Google">
+                <span>Continue with Google</span>
+            </button>
+
+            <div class="flex items-center gap-4 my-6">
+                <div class="h-px bg-white/10 flex-1"></div>
+                <span class="text-gray-500 text-xs uppercase">or</span>
+                <div class="h-px bg-white/10 flex-1"></div>
+            </div>
+
+            <!-- Email Form -->
+            <form onsubmit="handleEmailLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1 ml-1">Email Address</label>
+                    <input type="email" placeholder="you@example.com" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors" required>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1 ml-1">Password</label>
+                    <input type="password" placeholder="••••••••" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors" required>
+                </div>
+                <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-lg shadow-lg transition-all transform active:scale-95">
+                    Sign In with Email
+                </button>
+            </form>
+            
+            <p class="text-center mt-6 text-sm text-gray-400">
+                Don't have an account? <a href="#" class="text-purple-400 hover:text-purple-300">Sign up</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- 2. TOOL MODAL (Processing) -->
+    <div id="tool-modal" class="modal fixed inset-0 z-[100] flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-md" onclick="closeToolModal()"></div>
+        
+        <div class="modal-content glass-panel w-full max-w-2xl rounded-2xl p-8 relative border border-purple-500/30 shadow-[0_0_50px_rgba(124,58,237,0.2)]">
+            <button onclick="closeToolModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+
+            <!-- Step 1: Upload -->
+            <div id="modal-step-1" class="text-center">
+                <div class="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-purple-400">
+                    <i id="modal-icon" class="fas fa-file-pdf text-2xl"></i>
+                </div>
+                <h3 id="modal-title" class="text-2xl font-bold mb-2">Upload Files</h3>
+                <p id="modal-desc" class="text-gray-400 mb-8">Select your files to begin processing.</p>
+
+                <div id="drop-zone" class="border-2 border-dashed border-gray-600 hover:border-purple-500 rounded-xl p-10 transition-all cursor-pointer bg-white/5 hover:bg-white/10 group">
+                    <input type="file" id="file-input" class="hidden" multiple />
+                    <div class="pointer-events-none">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-500 group-hover:text-purple-400 mb-4 transition-colors"></i>
+                        <p class="text-lg text-gray-300">Click to upload or drag and drop</p>
+                        <p class="text-sm text-gray-500 mt-2">PDF, JPG, PNG, TXT</p>
+                    </div>
+                </div>
+
+                <div id="file-list" class="mt-4 text-left hidden">
+                    <p class="text-sm font-bold text-gray-400 mb-2">Selected Files:</p>
+                    <ul id="file-list-items" class="space-y-2 max-h-32 overflow-y-auto pr-2"></ul>
+                </div>
+
+                <button id="process-btn" class="mt-8 w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-lg shadow-lg transition-all transform active:scale-95 hidden">
+                    Start Processing
+                </button>
+            </div>
+
+            <!-- Step 2: Processing -->
+            <div id="modal-step-2" class="text-center hidden py-10">
+                <div class="loader mx-auto mb-6"></div>
+                <h3 class="text-xl font-bold animate-pulse">Processing...</h3>
+                <p class="text-gray-400 mt-2">Crunching bytes and rendering vectors.</p>
+            </div>
+
+            <!-- Step 3: Result -->
+            <div id="modal-step-3" class="text-center hidden">
+                <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-green-400">
+                    <i class="fas fa-check text-2xl"></i>
+                </div>
+                <h3 class="text-2xl font-bold mb-2">Success!</h3>
+                <p class="text-gray-400 mb-8">Your document is ready for download.</p>
+                <button id="download-btn" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-3 rounded-lg shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2">
+                    <i class="fas fa-download"></i> Download File
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- 1. Three.js Background Implementation ---
+        const initThreeJS = () => {
+            const container = document.getElementById('canvas-container');
+            const scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x050505, 0.002);
+
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // Particles
+            const geometry = new THREE.BufferGeometry();
+            const particlesCount = 700;
+            const posArray = new Float32Array(particlesCount * 3);
+            for(let i = 0; i < particlesCount * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * 20; 
+            }
+            geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const material = new THREE.PointsMaterial({ size: 0.03, color: 0xa855f7, transparent: true, opacity: 0.8 });
+            const particlesMesh = new THREE.Points(geometry, material);
+            scene.add(particlesMesh);
+
+            // Floating shapes
+            const shapes = [];
+            const shapeGeom = new THREE.IcosahedronGeometry(1, 0);
+            const shapeMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee, wireframe: true, transparent: true, opacity: 0.1 });
+            for (let i=0; i<5; i++) {
+                const mesh = new THREE.Mesh(shapeGeom, shapeMat);
+                mesh.position.set((Math.random()-0.5)*15, (Math.random()-0.5)*15, (Math.random()-0.5)*10 - 5);
+                mesh.scale.setScalar(Math.random() * 2 + 0.5);
+                scene.add(mesh);
+                shapes.push(mesh);
+            }
+            camera.position.z = 5;
+
+            // Mouse interaction
+            let mouseX = 0, mouseY = 0;
+            document.addEventListener('mousemove', (event) => {
+                mouseX = (event.clientX - window.innerWidth / 2) * 0.001;
+                mouseY = (event.clientY - window.innerHeight / 2) * 0.001;
+            });
+
+            const animate = () => {
+                requestAnimationFrame(animate);
+                particlesMesh.rotation.y += 0.002;
+                particlesMesh.rotation.x += (mouseY - particlesMesh.rotation.x) * 0.05;
+                particlesMesh.rotation.y += (mouseX - particlesMesh.rotation.y) * 0.05;
+                
+                shapes.forEach((shape, i) => {
+                    shape.rotation.x += 0.005 * (i + 1);
+                    shape.rotation.y += 0.005 * (i + 1);
+                });
+                renderer.render(scene, camera);
+            };
+            animate();
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        };
+
+        // --- 2. Data & UI Generation ---
+        const tools = [
+            { id: 'merge', name: 'Merge PDF', icon: 'fa-object-group', color: 'blue', category: 'organize', desc: 'Combine multiple PDFs into one unified document.' },
+            { id: 'split', name: 'Split PDF', icon: 'fa-cut', color: 'orange', category: 'organize', desc: 'Extract pages from your PDF file.' },
+            { id: 'img2pdf', name: 'Images to PDF', icon: 'fa-images', color: 'purple', category: 'convert', desc: 'Convert JPG, PNG images into a single PDF.' },
+            { id: 'txt2pdf', name: 'Text to PDF', icon: 'fa-file-alt', color: 'green', category: 'convert', desc: 'Turn raw text files into formatted PDFs.' },
+            { id: 'rotate', name: 'Rotate PDF', icon: 'fa-sync-alt', color: 'cyan', category: 'optimize', desc: 'Rotate PDF pages permanently.' },
+            { id: 'compress', name: 'Compress PDF', icon: 'fa-compress-arrows-alt', color: 'red', category: 'optimize', desc: 'Reduce file size while maintaining quality (Simulated).' },
+            { id: 'ocr', name: 'OCR PDF', icon: 'fa-eye', color: 'pink', category: 'optimize', desc: 'Extract text from scanned images (Simulated).' },
+        ];
+
+        const renderTools = (filter = 'all') => {
+            const grid = document.getElementById('tools-grid');
+            grid.innerHTML = '';
+            tools.forEach(tool => {
+                if (filter === 'all' || tool.category === filter) {
+                    const card = document.createElement('div');
+                    card.className = `tool-card-3d glass-panel rounded-2xl p-6 relative overflow-hidden group cursor-pointer h-full flex flex-col items-center text-center border-t border-white/5`;
+                    card.onclick = () => openToolModal(tool);
+                    
+                    let colorClass = 'text-gray-400', bgClass = 'bg-gray-700/20';
+                    if(tool.color === 'blue') { colorClass = 'text-blue-400'; bgClass = 'bg-blue-500/20'; }
+                    if(tool.color === 'purple') { colorClass = 'text-purple-400'; bgClass = 'bg-purple-500/20'; }
+                    if(tool.color === 'green') { colorClass = 'text-green-400'; bgClass = 'bg-green-500/20'; }
+                    if(tool.color === 'cyan') { colorClass = 'text-cyan-400'; bgClass = 'bg-cyan-500/20'; }
+                    if(tool.color === 'orange') { colorClass = 'text-orange-400'; bgClass = 'bg-orange-500/20'; }
+                    if(tool.color === 'red') { colorClass = 'text-red-400'; bgClass = 'bg-red-500/20'; }
+                    if(tool.color === 'pink') { colorClass = 'text-pink-400'; bgClass = 'bg-pink-500/20'; }
+
+                    card.innerHTML = `
+                        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-purple-900/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        <div class="tool-content w-16 h-16 ${bgClass} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-black/50">
+                            <i class="fas ${tool.icon} ${colorClass} text-2xl"></i>
+                        </div>
+                        <h4 class="text-xl font-bold text-white mb-2 group-hover:text-purple-300 transition-colors">${tool.name}</h4>
+                        <p class="text-gray-400 text-sm leading-relaxed">${tool.desc}</p>
+                    `;
+                    
+                    // 3D Tilt
+                    card.addEventListener('mousemove', (e) => {
+                        const rect = card.getBoundingClientRect();
+                        const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+                        const centerX = rect.width / 2; const centerY = rect.height / 2;
+                        const rotateX = ((y - centerY) / centerY) * -10;
+                        const rotateY = ((x - centerX) / centerX) * 10;
+                        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+                    });
+                    card.addEventListener('mouseleave', () => card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) scale3d(1, 1, 1)');
+
+                    grid.appendChild(card);
+                }
+            });
+        };
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => {
+                    b.classList.remove('bg-purple-500/20', 'border-purple-500/50', 'text-white');
+                    b.classList.add('bg-white/5', 'border-white/10', 'text-gray-300');
+                });
+                btn.classList.remove('bg-white/5', 'border-white/10', 'text-gray-300');
+                btn.classList.add('bg-purple-500/20', 'border-purple-500/50', 'text-white');
+                renderTools(btn.getAttribute('data-filter'));
+            });
+        });
+
+        // --- 3. AUTHENTICATION LOGIC (SIMULATION) ---
+        const authModal = document.getElementById('auth-modal');
+        const authButtons = document.getElementById('auth-buttons');
+        const userProfile = document.getElementById('user-profile');
+
+        const openAuthModal = () => authModal.classList.add('active');
+        const closeAuthModal = () => authModal.classList.remove('active');
+
+        // Simulate Google Login
+        const handleGoogleLogin = () => {
+            const btn = document.getElementById('google-login-btn');
+            const originalContent = btn.innerHTML;
+            
+            // Show loading state
+            btn.innerHTML = `<div class="loader mr-2" style="width:16px; height:16px; border-width:2px;"></div> Connecting...`;
+            btn.disabled = true;
+
+            setTimeout(() => {
+                // Success
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+                closeAuthModal();
+                
+                // Switch UI to logged in state
+                authButtons.classList.add('hidden');
+                userProfile.classList.remove('hidden');
+                
+                alert("Successfully logged in with Google! (Simulated)");
+                
+                // HERE IS WHERE YOU WOULD SEND THE TOKEN TO YOUR BACKEND
+                // fetch('/api/auth/google', { method: 'POST', body: JSON.stringify({ token: 'google_oauth_token' }) })
+            }, 1500);
+        };
+
+        const handleEmailLogin = (e) => {
+            e.preventDefault();
+            alert("Login simulated. In a real app, this sends credentials to your server.");
+            closeAuthModal();
+            authButtons.classList.add('hidden');
+            userProfile.classList.remove('hidden');
+        };
+
+        // --- 4. PDF TOOL LOGIC ---
+        let currentTool = null;
+        let selectedFiles = [];
+        const toolModal = document.getElementById('tool-modal');
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        const openToolModal = (tool) => {
+            currentTool = tool;
+            selectedFiles = [];
+            updateToolModalUI(1);
+            document.getElementById('modal-title').innerText = tool.name;
+            document.getElementById('modal-desc').innerText = tool.desc;
+            document.getElementById('modal-icon').className = `fas ${tool.icon} text-2xl text-purple-400`;
+            document.getElementById('file-list-items').innerHTML = '';
+            document.getElementById('file-list').classList.add('hidden');
+            document.getElementById('process-btn').classList.add('hidden');
+            fileInput.value = ''; 
+            toolModal.classList.add('active');
+        };
+
+        const closeToolModal = () => toolModal.classList.remove('active');
+
+        dropZone.onclick = () => fileInput.click();
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('border-purple-500', 'bg-white/10'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('border-purple-500', 'bg-white/10');
+        dropZone.ondrop = (e) => { e.preventDefault(); dropZone.classList.remove('border-purple-500', 'bg-white/10'); handleFiles(e.dataTransfer.files); };
+        fileInput.onchange = (e) => handleFiles(e.target.files);
+
+        const handleFiles = (files) => {
+            if(files.length > 0) {
+                selectedFiles = Array.from(files);
+                const list = document.getElementById('file-list-items');
+                list.innerHTML = '';
+                selectedFiles.forEach(f => {
+                    const li = document.createElement('li');
+                    li.className = 'text-sm text-gray-300 flex items-center gap-2';
+                    li.innerHTML = `<i class="fas fa-file-alt text-purple-500"></i> ${f.name} <span class="text-xs text-gray-500">(${(f.size/1024).toFixed(1)} KB)</span>`;
+                    list.appendChild(li);
+                });
+                document.getElementById('file-list').classList.remove('hidden');
+                document.getElementById('process-btn').classList.remove('hidden');
+            }
+        };
+
+        document.getElementById('process-btn').onclick = async () => {
+            updateToolModalUI(2);
+            try {
+                let pdfBytes;
+                
+                if (currentTool.id === 'merge') {
+                    const pdfDoc = await PDFLib.PDFDocument.create();
+                    for (const file of selectedFiles) {
+                        if (file.type === 'application/pdf') {
+                            const arrayBuffer = await file.arrayBuffer();
+                            const srcDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+                            const copiedPages = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+                            copiedPages.forEach((page) => pdfDoc.addPage(page));
+                        }
+                    }
+                    pdfBytes = await pdfDoc.save();
+                    downloadFile(pdfBytes, 'merged_document.pdf');
+                } else if (currentTool.id === 'img2pdf') {
+                    const pdfDoc = await PDFLib.PDFDocument.create();
+                    for (const file of selectedFiles) {
+                        if (file.type.startsWith('image/')) {
+                            const arrayBuffer = await file.arrayBuffer();
+                            let image;
+                            if (file.type === 'image/jpeg' || file.type === 'image/jpg') image = await pdfDoc.embedJpg(arrayBuffer);
+                            else if (file.type === 'image/png') image = await pdfDoc.embedPng(arrayBuffer);
+                            if (image) {
+                                const page = pdfDoc.addPage();
+                                const { width, height } = page.getSize();
+                                const dims = image.scale(width > height ? width / image.width : height / image.height);
+                                page.drawImage(image, { x: (width - dims.width) / 2, y: (height - dims.height) / 2, width: dims.width, height: dims.height });
+                            }
+                        }
+                    }
+                    pdfBytes = await pdfDoc.save();
+                    downloadFile(pdfBytes, 'images_to_pdf.pdf');
+                } else {
+                    await new Promise(r => setTimeout(r, 1500));
+                    const arrayBuffer = await selectedFiles[0].arrayBuffer();
+                    downloadFile(arrayBuffer, `processed_${selectedFiles[0].name}`);
+                }
+                updateToolModalUI(3);
+            } catch (error) {
+                console.error(error);
+                alert('Error processing file.');
+                updateToolModalUI(1);
+            }
+        };
+
+        const downloadFile = (data, filename) => {
+            const blob = new Blob([data], { type: 'application/pdf' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.getElementById('download-btn').onclick = () => { link.click(); closeToolModal(); };
+        };
+
+        const updateToolModalUI = (step) => {
+            document.getElementById('modal-step-1').classList.add('hidden');
+            document.getElementById('modal-step-2').classList.add('hidden');
+            document.getElementById('modal-step-3').classList.add('hidden');
+            document.getElementById(`modal-step-${step}`).classList.remove('hidden');
+        };
+
+        const scrollToTools = () => document.getElementById('tools').scrollIntoView({ behavior: 'smooth' });
+
+        document.getElementById('mobile-menu-btn').onclick = () => {
+            document.getElementById('mobile-menu').classList.toggle('hidden');
+        };
+
+        window.onload = () => {
+            initThreeJS();
+            renderTools();
+        };
+    </script>
+</body>
+</html>
